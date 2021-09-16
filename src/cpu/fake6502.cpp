@@ -324,5 +324,467 @@ namespace cpu
     {
         value = get_value();
         result = static_cast<uint16_t>(x - value);
+
+        if (x >= static_cast<uint8_t>(value & 0x00FF))
+            set_carry();
+        else
+            clear_carry();
+
+        if (x == static_cast<uint8_t>(value & 0x00FF))
+            set_zero();
+        else
+            clear_zero();
+
+        sign_calc(result);
+    }
+
+    void fake_6502::cpy()
+    {
+        value = get_value();
+        result = static_cast<uint16_t>(y - value);
+
+        if (y >= static_cast<uint8_t>(value & 0x00FF))
+            set_carry();
+        else
+            clear_carry();
+
+        if (y == static_cast<uint8_t>(value & 0x00FF))
+            set_zero();
+        else
+            clear_zero();
+
+        sign_calc(result);
+    }
+
+    void fake_6502::dec()
+    {
+        value = get_value();
+        result = value - 1;
+
+        zero_calc(result);
+        sign_calc(result);
+
+        put_value(result);
+    }
+
+    void fake_6502::dex()
+    {
+        x--;
+        zero_calc(x);
+        sign_calc(x);
+    }
+
+    void fake_6502::dey()
+    {
+        y--;
+        zero_calc(y);
+        sign_calc(y);
+    }
+
+    void fake_6502::eor()
+    {
+        penalty_op = 1;
+        value = get_value();
+        result = static_cast<uint16_t>(a ^ value);
+
+        zero_calc(result);
+        sign_calc(result);
+        save_accum(result);
+    }
+
+    void fake_6502::inc()
+    {
+        value = get_value();
+        result = value + 1;
+
+        zero_calc(result);
+        sign_calc(result);
+
+        put_value(result);
+    }
+
+    void fake_6502::inx()
+    {
+        x++;
+        zero_calc(x);
+        sign_calc(x);
+    }
+
+    void fake_6502::iny()
+    {
+        y++;
+        zero_calc(y);
+        sign_calc(y);
+    }
+
+    void fake_6502::jmp()
+    {
+        pc = ea;
+    }
+
+    void fake_6502::jsr()
+    {
+        penalty_op = 1;
+        value = get_value();
+        a = static_cast<uint8_t>(value & 0x00FF);
+
+        zero_calc(a);
+        sign_calc(a);
+    }
+
+    void fake_6502::lda()
+    {
+        penalty_op = 1;
+        value = get_value();
+        x = static_cast<uint8_t>(value & 0x00FF);
+
+        zero_calc(a);
+        sign_calc(a);
+    }
+
+    void fake_6502::ldx()
+    {
+        penalty_op = 1;
+        value = get_value();
+        x = static_cast<uint8_t>(value & 0x00FF);
+
+        zero_calc(x);
+        sign_calc(x);
+    }
+
+    void fake_6502::ldy()
+    {
+        penalty_op = 1;
+        value = get_value();
+        y = static_cast<uint8_t>(value & 0x00FF);
+
+        zero_calc(y);
+        sign_calc(y);
+    }
+
+    void fake_6502::lsr()
+    {
+        value = get_value();
+        result = value >> 1;
+
+        if (value & 1)
+            set_carry();
+        else
+            clear_carry();
+
+        zero_calc(result);
+        sign_calc(result);
+
+        put_value(result);
+    }
+
+    void fake_6502::nop()
+    {
+        switch (opcode)
+        {
+            case 0x1C:
+            case 0x3C:
+            case 0x5C:
+            case 0x7C:
+            case 0xDC:
+            case 0xFC:
+                penalty_op = 1;
+                break;
+        }
+    }
+
+    void fake_6502::ora()
+    {
+        penalty_op = 1;
+        value = get_value();
+        result = static_cast<uint16_t>(a | value);
+
+        zero_calc(result);
+        sign_calc(result);
+
+        save_accum(result);
+    }
+
+    void fake_6502::pha()
+    {
+        push8(a);
+    }
+
+    void fake_6502::php()
+    {
+        push8(status | FLAG_BREAK);
+    }
+
+    void fake_6502::pla()
+    {
+        a = pull8();
+
+        zero_calc(a);
+        sign_calc(a);
+    }
+
+    void fake_6502::plp()
+    {
+        status = pull8() | FLAG_CONSTANT;
+    }
+
+    void fake_6502::rol()
+    {
+        value = get_value();
+        result = (value << 1) | (status & FLAG_CARRY);
+
+        carry_calc(result);
+        zero_calc(result);
+        sign_calc(result);
+
+        put_value(result);
+    }
+
+    void fake_6502::ror()
+    {
+        value = get_value();
+        result = (value >> 1) | ((status & FLAG_CARRY) << 7);
+
+        if (value & 1)
+            set_carry();
+        else
+            clear_carry();
+
+        zero_calc(result);
+        sign_calc(result);
+
+        put_value(result);
+    }
+
+    void fake_6502::rti()
+    {
+        status = pull8();
+        value = pull16();
+        pc = value;
+    }
+
+    void fake_6502::rts()
+    {
+        value = pull16();
+        pc = value + 1;
+    }
+
+    void fake_6502::sbc()
+    {
+        penalty_op = 1;
+    
+#ifndef NES_CPU
+        if (status & FLAG_DECIMAL) {
+            value = get_value();
+            result = static_cast<uint16_t>(a) - (value & 0x0F) + (status & FLAG_CARRY) - 1;
+            if ((result & 0x0F) > (a & 0x0F))
+                result -= 6;
+            result -= (value & 0xF0);
+            if ((result & 0xFFF0) > static_cast<uint16_t>(a & 0xF0))
+                result -= 0x60;
+            if (result <= static_cast<uint16_t>(a))
+                set_carry();
+            else
+                clear_carry();
+
+            zero_calc(result);
+            sign_calc(result);
+
+            clock_ticks++;
+        } else {
+#endif
+            value = get_value() ^ 0x00FF;
+            result = static_cast<uint16_t>(a) + value + static_cast<uint16_t>(status & FLAG_CARRY);
+
+            carry_calc(result);
+            zero_calc(result);
+            overflow_calc(result, a, value);
+            sign_calc(result);
+#ifndef NES_CPU
+        }
+#endif
+        save_accum(result);
+    }
+
+    void fake_6502::sec()
+    {
+        set_carry();
+    }
+
+    void fake_6502::sed()
+    {
+        set_decimal();
+    }
+
+    void fake_6502::sei()
+    {
+        set_interrupt();
+    }
+
+    void fake_6502::sta()
+    {
+        put_value(a);
+    }
+
+    void fake_6502::stx()
+    {
+        put_value(x);
+    }
+
+    void fake_6502::sty()
+    {
+        put_value(y);
+    }
+
+    void fake_6502::tax()
+    {
+        x = a;
+        zero_calc(x);
+        sign_calc(x);
+    }
+
+    void fake_6502::tay()
+    {
+        y = a;
+        zero_calc(y);
+        sign_calc(y);
+    }
+
+    void fake_6502::tsx()
+    {
+        x = sp;
+        zero_calc(x);
+        sign_calc(x);
+    }
+    
+    void fake_6502::txa()
+    {
+        a = x;
+        zero_calc(a);
+        sign_calc(a);
+    }
+
+    void fake_6502::txs()
+    {
+        sp = x;
+    }
+
+    void fake_6502::tya()
+    {
+        a = y;
+        zero_calc(a);
+        sign_calc(a);
+    }
+
+    void fake_6502::ind0()
+    {
+        uint16_t eahelp = static_cast<uint16_t>(read(pc++));
+        uint16_t eahelp2 = (eahelp & 0xFF00) | ((eahelp + 1) & 0x00FF);
+        ea = static_cast<uint16_t>(read(eahelp)) | static_cast<uint16_t>(read(eahelp2) << 8);
+    }
+
+    void fake_6502::ainx()
+    {
+        uint16_t eahelp = static_cast<uint16_t>(read(pc)) | static_cast<uint16_t>(read(pc) << 8);
+        eahelp = (eahelp + static_cast<uint16_t>(x)) & 0xFF;
+#if 0
+        uint16_t eahelp2 = (eahelp & 0xFF00) | ((eahelp + 1) & 0x00FF);
+#else
+        uint16_t eahelp2 = eahelp + 1;
+#endif
+        ea = static_cast<uint16_t>(read(eahelp)) | static_cast<uint16_t>(read(eahelp2) << 8);
+        pc += 2;
+    }
+
+    void fake_6502::stz()
+    {
+        put_value(0);
+    }
+
+    void fake_6502::bra()
+    {
+        oldpc = pc;
+        pc += reladdr;
+        if ((oldpc & 0xFF00) != (pc & 0xFF00))
+            clock_ticks += 2;
+        else
+            clock_ticks++;
+    }
+
+    void fake_6502::phx()
+    {
+        push8(x);
+    }
+
+    void fake_6502::plx()
+    {
+        x = pull8();
+        zero_calc(x);
+        sign_calc(x);
+    }
+
+    void fake_6502::phy()
+    {
+        push8(y);
+    }
+
+    void fake_6502::ply()
+    {
+        y = pull8();
+        zero_calc(y);
+        sign_calc(y);
+    }
+
+    void fake_6502::tsb()
+    {
+        value = get_value();
+        result = static_cast<uint16_t>(a & value);
+        zero_calc(result);
+        result = value | a;
+        put_value(result);
+    }
+
+    void fake_6502::trb()
+    {
+        value = get_value();
+        result = static_cast<uint16_t>(a & value);
+        zero_calc(result);
+        result = value & (a ^ 0xFF);
+        put_value(result);
+    }
+
+    void fake_6502::dbg()
+    {
+        //
+    }
+
+    void fake_6502::wai()
+    {
+        if (~status & FLAG_INTERRUPT)
+            waiting = 1;
+    }
+
+    void fake_6502::bbr(uint16_t bitmask)
+    {
+        if ((get_value() & bitmask) == 0) {
+            oldpc = pc;
+            pc += reladdr;
+            if ((oldpc & 0xFF00) != (pc & 0xFF00))
+                clock_ticks += 2;
+            else
+                clock_ticks++;
+        }
+    }
+
+    void fake_6502::bbs(uint16_t bitmask)
+    {
+        if ((get_value() & bitmask) != 0) {
+            oldpc = pc;
+            pc += reladdr;
+            if ((oldpc & 0xFF00) != (pc & 0xFF00))
+                clock_ticks += 2;
+            else
+                clock_ticks++;
+        }
     }
 }
